@@ -91,7 +91,7 @@ function Location(cityName, locData) {
 }
 function Weather(wetherData) {
     this.forecast = wetherData.weather.description;
-    this.time = wetherData.valid_date;
+    this.time = new Date(wetherData.datetime).toString().slice(0,15);;
 }
 function Parks(parksData) {
     this.name = parksData.fullName;
