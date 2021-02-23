@@ -7,7 +7,7 @@ dot.config();
 const pg = require('pg')
 
 // const client = new pg.Client(process.env.DATABASE_URL)
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL,   ssl: { rejectUnauthorized: false } });
+const client = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 client.connect();
 const cors = require('cors');
 
@@ -30,14 +30,11 @@ server.get('*', errHandler)
 
 // Handler Functions
 
-
-
-
 // http://localhost:3500/location?city=amman
 function locHandler(req, res) {
 
     const cityName = req.query.city
-    let trigger = false;
+    let trigger = true;
     let key = process.env.LOCATION_KEY;
     let url = `https://api.locationiq.com/v1/autocomplete.php?key=${key}&q=${cityName}`;
     let SQL = `SELECT * FROM locations;`;
@@ -46,42 +43,25 @@ function locHandler(req, res) {
         .then(result => {
             result.rows.forEach(element => {
                 if (element.search_query == cityName) {
-                    trigger = true;
+                    let SQL = `SELECT * FROM locations WHERE search_query='${cityName}';`
+                    // trigger = true;
+                    client.query(SQL)
+                        .then(result => {
+                            let x = new LocationFromDB(cityName, result.rows[0])
+                            res.send(x)
+                            trigger = false
+                        })
                 }
             });
             if (trigger) {
-
-                let SQL = `SELECT * FROM locations WHERE search_query='${cityName}';`
-
-                client.query(SQL)
-                    .then(result => {
-                        let x = new getLocationfromDAtaB(cityName, result.rows[0])
-
-                        function getLocationfromDAtaB(city, data) {
-                            this.search_query = city;
-                            this.formatted_query = data.formatted_query;
-                            this.latitude = data.latitude;
-                            this.longitude = data.longitude;
-                        }
-                        res.send(x)
-                    })
-
-            } else if (!trigger) {
-                console.log("SSdasdsa");
+                console.log("Adding To DataBase");
                 superAgent.get(url).then(locData => {
-                    let fstLoc = new getLocation(cityName, locData.body[0])
+                    let x = new Location(cityName, locData.body[0])
 
-                    function getLocation(city, data) {
-
-                        this.search_query = city;
-                        this.formatted_query = data.display_name;
-                        this.latitude = data.lat;
-                        this.longitude = data.lat;
-                    }
-                    let citynam = fstLoc.search_query;
-                    let formN = fstLoc.formatted_query;
-                    let lati = fstLoc.latitude;
-                    let long = fstLoc.longitude;
+                    let citynam = x.search_query;
+                    let formN = x.formatted_query;
+                    let lati = x.latitude;
+                    let long = x.longitude;
                     let sql = `INSERT INTO locations VALUES($1,$2,$3,$4);`
                     let allRes = [citynam, formN, lati, long]
                     client.query(sql, allRes)
@@ -89,36 +69,11 @@ function locHandler(req, res) {
                             // res.send(result.rows);
                             // res.send('data has been inserted!!');
                         })
-                    res.send(fstLoc)
+                    res.send(x)
                 })
             }
-
         })
-
-
-
-    // const cityName = req.query.city;
-    // let key = process.env.LOCATION_KEY;
-    // let url = `https://api.locationiq.com/v1/autocomplete.php?key=${key}&q=${cityName}`
-
-    // superAgent.get(url)
-    //     .then(locData => {
-    //         const locObj = new Location(cityName, locData.body[0]);
-    //         res.send(locObj);
-    //     })
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 // http://localhost:3500/weather?search_query=amman&formatted_query=Amman%2C%20Amman%2C%2011181%2C%20Jordan&latitude=31.9515694&longitude=35.9239625&page=1
 function wetherHandler(req, res) {
@@ -152,8 +107,6 @@ function parksHandler(req, res) {
         })
 }
 
-
-
 function errHandler(req, res) {
     let errObj = {
         status: 500,
@@ -171,6 +124,14 @@ function Location(cityName, locData) {
     this.latitude = locData.lat;
     this.longitude = locData.lon;
 }
+
+function LocationFromDB(city, data) {
+    this.search_query = city;
+    this.formatted_query = data.formatted_query;
+    this.latitude = data.latitude;
+    this.longitude = data.longitude;
+}
+
 function Weather(wetherData) {
     this.forecast = wetherData.weather.description;
     this.time = new Date(wetherData.datetime).toString().slice(0, 15);;
