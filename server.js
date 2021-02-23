@@ -10,9 +10,12 @@ const pg = require('pg')
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL,   ssl: { rejectUnauthorized: false } });
 client.connect();
 const cors = require('cors');
+
 server.use(cors());
 
 const port = process.env.PORT || 4000;
+
+
 
 const superAgent = require('superagent')
 
