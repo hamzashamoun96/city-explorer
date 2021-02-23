@@ -2,14 +2,20 @@
 
 const express = require('express');
 const server = express();
-
 const dot = require('dotenv');
 dot.config();
+const pg = require('pg')
 
+// const client = new pg.Client(process.env.DATABASE_URL)
+const client = new pg.Client({ connectionString: process.env.DATABASE_URL,   ssl: { rejectUnauthorized: false } });
+client.connect();
 const cors = require('cors');
 
 server.use(cors());
-const PORT = process.env.PORT || 4000;
+
+const port = process.env.PORT || 4000;
+
+
 
 const superAgent = require('superagent')
 
@@ -24,19 +30,95 @@ server.get('*', errHandler)
 
 // Handler Functions
 
+
+
+
 // http://localhost:3500/location?city=amman
 function locHandler(req, res) {
 
-    const cityName = req.query.city;
+    const cityName = req.query.city
+    let trigger = false;
     let key = process.env.LOCATION_KEY;
-    let url = `https://api.locationiq.com/v1/autocomplete.php?key=${key}&q=${cityName}`
+    let url = `https://api.locationiq.com/v1/autocomplete.php?key=${key}&q=${cityName}`;
+    let SQL = `SELECT * FROM locations;`;
 
-    superAgent.get(url)
-        .then(locData => {
-            const locObj = new Location(cityName, locData.body[0]);
-            res.send(locObj);
+    client.query(SQL)
+        .then(result => {
+            result.rows.forEach(element => {
+                if (element.search_query == cityName) {
+                    trigger = true;
+                }
+            });
+            if (trigger) {
+
+                let SQL = `SELECT * FROM locations WHERE search_query='${cityName}';`
+
+                client.query(SQL)
+                    .then(result => {
+                        let x = new getLocationfromDAtaB(cityName, result.rows[0])
+
+                        function getLocationfromDAtaB(city, data) {
+                            this.search_query = city;
+                            this.formatted_query = data.formatted_query;
+                            this.latitude = data.latitude;
+                            this.longitude = data.longitude;
+                        }
+                        res.send(x)
+                    })
+
+            } else if (!trigger) {
+                console.log("SSdasdsa");
+                superAgent.get(url).then(locData => {
+                    let fstLoc = new getLocation(cityName, locData.body[0])
+
+                    function getLocation(city, data) {
+
+                        this.search_query = city;
+                        this.formatted_query = data.display_name;
+                        this.latitude = data.lat;
+                        this.longitude = data.lat;
+                    }
+                    let citynam = fstLoc.search_query;
+                    let formN = fstLoc.formatted_query;
+                    let lati = fstLoc.latitude;
+                    let long = fstLoc.longitude;
+                    let sql = `INSERT INTO locations VALUES($1,$2,$3,$4);`
+                    let allRes = [citynam, formN, lati, long]
+                    client.query(sql, allRes)
+                        .then((result) => {
+                            // res.send(result.rows);
+                            // res.send('data has been inserted!!');
+                        })
+                    res.send(fstLoc)
+                })
+            }
+
         })
+
+
+
+    // const cityName = req.query.city;
+    // let key = process.env.LOCATION_KEY;
+    // let url = `https://api.locationiq.com/v1/autocomplete.php?key=${key}&q=${cityName}`
+
+    // superAgent.get(url)
+    //     .then(locData => {
+    //         const locObj = new Location(cityName, locData.body[0]);
+    //         res.send(locObj);
+    //     })
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 // http://localhost:3500/weather?search_query=amman&formatted_query=Amman%2C%20Amman%2C%2011181%2C%20Jordan&latitude=31.9515694&longitude=35.9239625&page=1
 function wetherHandler(req, res) {
@@ -91,7 +173,7 @@ function Location(cityName, locData) {
 }
 function Weather(wetherData) {
     this.forecast = wetherData.weather.description;
-    this.time = new Date(wetherData.datetime).toString().slice(0,15);;
+    this.time = new Date(wetherData.datetime).toString().slice(0, 15);;
 }
 function Parks(parksData) {
     this.name = parksData.fullName;
@@ -101,6 +183,6 @@ function Parks(parksData) {
     this.url = parksData.url;
 }
 
-server.listen(PORT, () => {
-    console.log(`Server is listening on Port ${PORT}`)
+server.listen(port, () => {
+    console.log(`Server is listening on Port ${port}`)
 })
